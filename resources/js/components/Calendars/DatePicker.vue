@@ -9,6 +9,10 @@
             class="mt-2"
             @input="$emit('change', value)"
         />
+        <p v-if="datepicker.opened !== null">
+            <span v-if="datepicker.opened">We are opened at that day.</span>
+            <span v-else>Sorry, but we are closed at that day.</span>
+        </p>
     </div>
 </template>
 

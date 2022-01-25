@@ -13,10 +13,15 @@ class WorkingScheduleController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
+        $date = $request->date ? new Carbon($request->date) : Carbon::now();
+        $initialDate = new Carbon($date);
+
+        $until = WorkingSchedule::untilOpened($date);
         return response([
-            'until' => WorkingSchedule::untilOpened(Carbon::now())
+            'until' => $until,
+            'openedAtInitialDate' => $initialDate->toDateString() === $until->toDateString()
         ]);
     }
 }

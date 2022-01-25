@@ -119,23 +119,32 @@ class WorkingSchedule extends Model
             ->whereNotNull('since')
             ->get();
 
-        for ($i = 0; $i < count($schedules); ++$i) {
+        for ($i = 0; $i < count($schedules);) {
             $schedule = $schedules[$i];
             $nextSchedule = $schedules[$i + 1] ?? null;
 
-            if ($schedule->since) {
+            $index = self::convertToIndex($date->dayOfWeek);
+            if ($schedule->since && $schedule->week_day === $index) {
                 $time = self::findFirstInSchedule($date, $schedule, $break);
             }
 
-            if ($time) {
+            if ($schedule->week_day !== $index) {
+                $nextSchedule = $schedule;
+            }
+
+            if (isset($time)) {
                 return $time;
             } else if ($nextSchedule) {
                 $date->addDay();
 
                 if ($nextSchedule->since) {
-                    $time = Carbon::parse($nextSchedule->since);
-                    $date->setTime($time->hour, $time->minute, $time->second);
+                    $nextTime = Carbon::parse($nextSchedule->since);
+                    $date->setTime($nextTime->hour, $nextTime->minute, $nextTime->second);
                     $break = WorkBreak::lastBreakByDate($date);
+                }
+
+                if ($nextSchedule !== $schedule) {
+                    ++$i;
                 }
             }
         }
