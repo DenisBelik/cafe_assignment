@@ -68,4 +68,108 @@ class WorkingSchedule extends Model
             'week_day' => $day
         ], $schedule);
     }
+
+    /**
+     * Convert ISO week day index to internal index.
+     * 
+     * @param int $id
+     * 
+     * @return int
+     */
+    public static function convertToIndex(int $id) {
+        return $id === 0 ? self::Sunday : $id;
+    }
+
+    /**
+     * Calculates the closest date until the opening. If store is
+     * open in `$date`, then the function returns it. This function
+     * also handles wrapping and work breaks.
+     * 
+     * @param Carbon $date
+     * 
+     * @return Carbon|null
+     */
+    public static function untilOpened(Carbon $date) {
+        $index = self::convertToIndex($date->dayOfWeek);
+
+        // If we found when store is opened after `$date`.
+        $break = WorkBreak::lastBreakByDate($date);
+        $schedule = self::untilOpenedSinceDay($date, $index, $break);
+        if ($schedule) {
+            return $schedule;
+        }
+        
+        // Else, search since the next Monday.
+        $date->next('Monday');
+        $date->startOfDay();
+        $break = WorkBreak::lastBreakByDate($date);
+        return self::untilOpenedSinceDay($date, WorkingSchedule::Monday, $break);
+    }
+
+    /**
+     * Calculates the closest date until the opening since the given
+     * week day.
+     * 
+     * @param Carbon $date
+     * 
+     * @return Carbon|null
+     */
+    private static function untilOpenedSinceDay(Carbon $date, int $index, ?WorkBreak $break) {
+        $schedules = WorkingSchedule::where('week_day', '>=', $index)
+            ->whereNotNull('since')
+            ->get();
+
+        for ($i = 0; $i < count($schedules); ++$i) {
+            $schedule = $schedules[$i];
+            $nextSchedule = $schedules[$i + 1] ?? null;
+
+            if ($schedule->since) {
+                $time = self::findFirstInSchedule($date, $schedule, $break);
+            }
+
+            if ($time) {
+                return $time;
+            } else if ($nextSchedule) {
+                $date->addDay();
+
+                if ($nextSchedule->since) {
+                    $time = Carbon::parse($nextSchedule->since);
+                    $date->setTime($time->hour, $time->minute, $time->second);
+                    $break = WorkBreak::lastBreakByDate($date);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Performs searching the closest opening in the given working day. If
+     * it wasn't found, then the function returns null.
+     * 
+     * @param Carbon $date
+     * @param WorkingSchedule $schedule
+     * @param WorkBreak|null $break
+     * 
+     * @return Carbon|null
+     */
+    private static function findFirstInSchedule(Carbon $date, WorkingSchedule $schedule, ?WorkBreak $break) {
+        $until = new Carbon($date);
+        if ($break) {
+            $time = Carbon::parse($break->until);
+            $until->setTime($time->hour, $time->minute, $time->second);
+        }
+
+        if ($until->toTimeString() < $schedule->since) {
+            $time = Carbon::parse($schedule->since);
+            $until->setTime($time->hour, $time->minute, $time->second);
+            $break = WorkBreak::lastBreakByDate(new Carbon($until));
+            return self::findFirstInSchedule($until, $schedule, $break);
+        }
+
+        if ($schedule->until >= $until->toTimeString()) {
+            return $until;
+        }
+        return null;
+    }
 }
