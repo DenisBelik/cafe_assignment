@@ -146,6 +146,11 @@ class WorkingSchedule extends Model
                 if ($nextSchedule !== $schedule) {
                     ++$i;
                 }
+            } else {
+                $date->addDay();
+                $date->setTime(0, 0, 0);
+                $break = WorkBreak::lastBreakByDate($date);
+                ++$i;
             }
         }
 
